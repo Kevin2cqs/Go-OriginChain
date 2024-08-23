@@ -8,8 +8,11 @@ import (
 )
 
 func main() {
-	node := createServer("FULL_NODE", "", ":3000", []string{"6000"}, ":9000")
-	go node.start()
+	validatorPrivKey := crypto.GeneratePrivateKey()
+
+	node := createServer("FULL_NODE", &validatorPrivKey, ":3000", []string{"6000"}, ":9000")
+	go node.Start()
+
 	select {} //Block the main thread
 }
 
@@ -22,7 +25,7 @@ func createServer(id string, pk *crypto.PrivateKey, addr string, seedNodes []str
 		ID:            id,
 	}
 
-	s, err := network.newServer(opts)
+	s, err := network.NewServer(opts)
 	if err != nil {
 		log.Fatal(err)
 	}

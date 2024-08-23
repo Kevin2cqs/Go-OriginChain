@@ -24,7 +24,7 @@ type AccountState struct {
 
 func NewAccountState() *AccountState {
 	return &AccountState{
-		accounts: make(map[types.Adress]*Account),
+		accounts: make(map[types.Address]*Account),
 	}
 }
 

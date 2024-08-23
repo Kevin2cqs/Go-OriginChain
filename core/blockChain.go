@@ -21,9 +21,11 @@ type BlockChain struct {
 
 	accountState *AccountState
 
-	stateLock     sync.RWMutex
-	validator     Validator
-	contractState *State
+	stateLock       sync.RWMutex
+	collectionState map[types.Hash]*CollectionTx
+	mintState       map[types.Hash]*MintTx
+	validator       Validator
+	contractState   *State
 }
 
 func NewBlockChain(l log.Logger, genesis *Block) (*BlockChain, error) {
@@ -51,21 +53,68 @@ func (bc *BlockChain) HasBlock(height uint32) bool {
 	return height <= bc.Height()
 }
 
-func (bc *BlockChain) Height() uint32 {
-	bc.lock.RLock()
-	defer bc.lock.RUnlock()
+func (bc *BlockChain) GetTxByHash(hash types.Hash) (*Transaction, error) {
+	bc.lock.Lock()
+	defer bc.lock.Lock()
 
-	return uint32(len(bc.headers) - 1)
+	tx, ok := bc.txStore[hash]
+	if !ok {
+		return nil, fmt.Errorf("could not find tx with hash (%s)", hash)
+	}
+
+	return tx, nil
+}
+
+func (bc *BlockChain) GetBlock(height uint32) (*Block, error) {
+	if height > bc.Height() {
+		return nil, fmt.Errorf("given height (%d) too high", height)
+	}
+
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+
+	return bc.blocks[height], nil
+}
+
+func (bc *BlockChain) GetBlockByHash(hash types.Hash) (*Block, error) {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+
+	block, ok := bc.blockStore[hash]
+	if !ok {
+		return nil, fmt.Errorf("block with hash (%s) not found", hash)
+	}
+
+	return block, nil
 }
 
 func (bc *BlockChain) GetHeader(height uint32) (*Header, error) {
 	if height > bc.Height() {
 		return nil, fmt.Errorf("given height (%d) too high", height)
 	}
+
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
 
 	return bc.headers[height], nil
+}
+
+func (bc *BlockChain) AddBlock(b *Block) error {
+	if err := bc.validator.ValidateBlock(b); err != nil {
+		return err
+	}
+	return bc.addBlockWithoutValidation(b)
+}
+
+func (bc *BlockChain) SetValidator(v Validator) {
+	bc.validator = v
+}
+
+func (bc *BlockChain) Height() uint32 {
+	bc.lock.RLock()
+	defer bc.lock.RUnlock()
+
+	return uint32(len(bc.headers) - 1)
 }
 
 func (bc *BlockChain) handleNativeTransfer(tx *Transaction) error {
@@ -87,16 +136,38 @@ func (bc *BlockChain) handleTransaction(tx *Transaction) error {
 		}
 	}
 
-	// if tx.TxInner != nil {
-	// 	if err := bc.handleNativeNFT(tx); err != nil {
-	// 		return err
-	// 	}
-	// }
+	if tx.TxInner != nil {
+		if err := bc.handleNativeNFT(tx); err != nil {
+			return err
+		}
+	}
 
 	if tx.Value > 0 {
 		if err := bc.handleNativeTransfer(tx); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (bc *BlockChain) handleNativeNFT(tx *Transaction) error {
+	hash := tx.Hash(TxHasher{})
+
+	switch t := tx.TxInner.(type) {
+	case CollectionTx:
+		bc.collectionState[hash] = &t
+		bc.logger.Log("msg", "created new NFT collection", "hash", hash)
+	case MintTx:
+		_, ok := bc.collectionState[t.Collection]
+		if !ok {
+			return fmt.Errorf("collection (%s) does not exist on the blockchain", t.Collection)
+		}
+		bc.mintState[hash] = &t
+
+		bc.logger.Log("msg", "created new NFT mint", "NFT", t.NFT, "collection", t.Collection)
+	default:
+		return fmt.Errorf("unsupported tx type %v", t)
 	}
 
 	return nil

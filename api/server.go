@@ -42,10 +42,10 @@ type ServerConfig struct {
 type Server struct {
 	txChan chan *core.Transaction
 	ServerConfig
-	bc *core.Blockchain
+	bc *core.BlockChain
 }
 
-func NewServer(cfg ServerConfig, bc *core.Blockchain, txChan chan *core.Transaction) *Server {
+func NewServer(cfg ServerConfig, bc *core.BlockChain, txChan chan *core.Transaction) *Server {
 	return &Server{
 		ServerConfig: cfg,
 		bc:           bc,

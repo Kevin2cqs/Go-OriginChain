@@ -40,7 +40,7 @@ type Server struct {
 
 	ServerOpts
 	mempool     *TxPool
-	chain       *core.Blockchain
+	chain       *core.BlockChain
 	isValidator bool
 	rpcCh       chan RPC
 	quitCh      chan struct{}
@@ -59,7 +59,7 @@ func NewServer(opts ServerOpts) (*Server, error) {
 		opts.Logger = log.With(opts.Logger, "addr", opts.ID)
 	}
 
-	chain, err := core.NewBlockchain(opts.Logger, genesisBlock())
+	chain, err := core.NewBlockChain(opts.Logger, genesisBlock())
 	if err != nil {
 		return nil, err
 	}
@@ -347,12 +347,6 @@ func (s *Server) processTransaction(tx *core.Transaction) error {
 	if err := tx.Verify(); err != nil {
 		return err
 	}
-
-	// s.Logger.Log(
-	// 	"msg", "adding new tx to mempool",
-	// 	"hash", hash,
-	// 	"mempoolPending", s.mempool.PendingCount(),
-	// )
 
 	go s.broadcastTx(tx)
 
